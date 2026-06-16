@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.services.storage import recipe_storage
+from app.services.metrics import metrics
 
 
 @pytest.fixture
@@ -19,6 +20,14 @@ def clean_storage():
     recipe_storage.recipes.clear()
     yield
     recipe_storage.recipes.clear()
+
+
+@pytest.fixture
+def clean_metrics():
+    """Reset timing metrics before and after each test"""
+    metrics.reset()
+    yield
+    metrics.reset()
 
 
 @pytest.fixture

@@ -31,6 +31,11 @@
         <div class="alert alert-light">
             Found {{ recipes|length }} recipe(s) for "{{ search_query }}"
             <a href="/" class="btn btn-sm btn-outline-secondary ms-2">Clear Search</a>
+            {% if timing %}
+            <br><small class="text-muted">
+                Query time — internal: {{ timing.internal_ms }}ms{% if timing.external_ms is defined %} · external (TheMealDB): {{ timing.external_ms }}ms{% endif %}
+            </small>
+            {% endif %}
         </div>
         {% if external_search_error %}
         <div class="alert alert-warning">

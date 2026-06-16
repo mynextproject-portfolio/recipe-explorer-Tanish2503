@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Response, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List, Optional
@@ -6,6 +6,7 @@ import json
 from app.models import Recipe, RecipeCreate, RecipeUpdate
 from app.services.storage import recipe_storage
 from app.services import themealdb
+from app.services.metrics import metrics, timed
 
 router = APIRouter(prefix="/api")
 
@@ -15,16 +16,22 @@ MAX_IMPORT_FILE_SIZE = 1_000_000  # 1MB
 async def _combined_search(term: Optional[str]) -> dict:
     """Search internal storage and, if a term is given, TheMealDB too."""
     if not term:
-        return {"recipes": recipe_storage.get_all_recipes()}
+        with timed("internal", "list_all") as timer:
+            recipes = recipe_storage.get_all_recipes()
+        return {"recipes": recipes, "timing": {"internal_ms": round(timer.duration_ms, 2)}}
 
-    recipes = recipe_storage.search_recipes(term)
+    with timed("internal", "search") as internal_timer:
+        recipes = recipe_storage.search_recipes(term)
+    timing = {"internal_ms": round(internal_timer.duration_ms, 2)}
 
     try:
-        recipes = recipes + await themealdb.search_external_recipes(term)
+        with timed("external", "search") as external_timer:
+            external_recipes = await themealdb.search_external_recipes(term)
+        timing["external_ms"] = round(external_timer.duration_ms, 2)
     except themealdb.MealDBError as error:
-        return {"recipes": recipes, "external_search_error": str(error)}
+        return {"recipes": recipes, "external_search_error": str(error), "timing": timing}
 
-    return {"recipes": recipes}
+    return {"recipes": recipes + external_recipes, "timing": timing}
 
 
 @router.get("/recipes")
@@ -50,25 +57,39 @@ def export_recipes():
 
 
 @router.get("/recipes/external/{meal_id}")
-async def get_external_recipe(meal_id: str):
+async def get_external_recipe(meal_id: str, response: Response):
     """Get a specific recipe by ID from TheMealDB"""
     try:
-        recipe = await themealdb.get_external_recipe(meal_id)
+        with timed("external", "lookup") as timer:
+            recipe = await themealdb.get_external_recipe(meal_id)
     except themealdb.MealDBError as error:
-        raise HTTPException(status_code=502, detail=str(error))
+        raise HTTPException(
+            status_code=502,
+            detail=str(error),
+            headers={"X-Query-Time-Ms": f"{timer.duration_ms:.2f}"},
+        )
 
+    response.headers["X-Query-Time-Ms"] = f"{timer.duration_ms:.2f}"
     if not recipe:
         raise HTTPException(status_code=404, detail=f"External recipe '{meal_id}' not found")
     return recipe
 
 
 @router.get("/recipes/{recipe_id}")
-def get_recipe(recipe_id: str):
+def get_recipe(recipe_id: str, response: Response):
     """Get a specific recipe by ID"""
-    recipe = recipe_storage.get_recipe(recipe_id)
+    with timed("internal", "lookup") as timer:
+        recipe = recipe_storage.get_recipe(recipe_id)
+    response.headers["X-Query-Time-Ms"] = f"{timer.duration_ms:.2f}"
     if not recipe:
         raise HTTPException(status_code=404, detail=f"Recipe '{recipe_id}' not found")
     return recipe
+
+
+@router.get("/metrics")
+def get_metrics():
+    """View aggregated timing metrics for internal storage vs external (TheMealDB) calls"""
+    return {"metrics": metrics.summary()}
 
 
 @router.post("/recipes")
