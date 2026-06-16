@@ -44,12 +44,12 @@
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">{{ recipe.title }}</h5>
-                    <p class="card-text">{{ recipe.description[:100] }}{% if recipe.description|length > 100 %}...{% endif %}</p>
+                    {% if recipe.cuisine %}
                     <div class="mb-2">
-                        <small class="text-muted">
-                            <strong>Difficulty:</strong> <span class="badge bg-{% if recipe.difficulty == 'Easy' %}success{% elif recipe.difficulty == 'Medium' %}warning{% else %}danger{% endif %}">{{ recipe.difficulty }}</span>
-                        </small>
+                        <span class="badge bg-primary">{{ recipe.cuisine }}</span>
                     </div>
+                    {% endif %}
+                    <p class="card-text">{{ recipe.description[:100] }}{% if recipe.description|length > 100 %}...{% endif %}</p>
                     {% if recipe.tags %}
                     <div class="mb-2">
                         {% for tag in recipe.tags %}
@@ -59,8 +59,8 @@
                     {% endif %}
                     <div class="mb-2">
                         <small class="text-muted">
-                            {{ recipe.ingredients|length }} ingredients • 
-                            {{ recipe.instructions|length }} steps
+                            {{ recipe.ingredients|length }} ingredients •
+                            {{ recipe.instructions|length }} step{{ 's' if recipe.instructions|length != 1 else '' }}
                         </small>
                     </div>
                 </div>
