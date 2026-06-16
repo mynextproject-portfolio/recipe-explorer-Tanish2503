@@ -52,27 +52,32 @@ class RecipeStorage:
             return True
         return False
     
-    def import_recipes(self, recipes_data: List[dict]) -> int:
-        # Replace all existing recipes
+    def import_recipes(self, recipes_data: List[dict]) -> dict:
+        """Replace all existing recipes with validated entries from recipes_data.
+
+        Each entry is validated against the Recipe schema independently, so one
+        invalid recipe doesn't fail the whole import. Returns a breakdown of
+        what was imported vs. skipped, with a reason for each skip.
+        """
         self.recipes.clear()
-        count = 0
-        
-        for recipe_dict in recipes_data:
+        imported = 0
+        errors = []
+
+        for index, recipe_dict in enumerate(recipes_data):
             try:
                 # Handle datetime strings if they exist
                 if 'created_at' in recipe_dict:
                     recipe_dict['created_at'] = datetime.fromisoformat(recipe_dict['created_at'])
                 if 'updated_at' in recipe_dict:
                     recipe_dict['updated_at'] = datetime.fromisoformat(recipe_dict['updated_at'])
-                
+
                 recipe = Recipe(**recipe_dict)
                 self.recipes[recipe.id] = recipe
-                count += 1
-            except Exception:
-                # Skip invalid recipes
-                continue
-        
-        return count
+                imported += 1
+            except Exception as error:
+                errors.append({"index": index, "error": str(error)})
+
+        return {"imported": imported, "skipped": len(errors), "errors": errors}
 
 
 # Global storage instance (intentionally simple for refactoring)
