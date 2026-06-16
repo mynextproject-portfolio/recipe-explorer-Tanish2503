@@ -5,22 +5,39 @@ from typing import List, Optional
 import json
 from app.models import Recipe, RecipeCreate, RecipeUpdate
 from app.services.storage import recipe_storage
+from app.services import themealdb
 
 router = APIRouter(prefix="/api")
 
 MAX_IMPORT_FILE_SIZE = 1_000_000  # 1MB
 
 
-@router.get("/recipes")
-def get_recipes(search: Optional[str] = None):
-    """Get all recipes or search by title"""
-    # TODO: Add pagination when we have more than 100 recipes
-    if search:
-        recipes = recipe_storage.search_recipes(search)
-    else:
-        recipes = recipe_storage.get_all_recipes()
+async def _combined_search(term: Optional[str]) -> dict:
+    """Search internal storage and, if a term is given, TheMealDB too."""
+    if not term:
+        return {"recipes": recipe_storage.get_all_recipes()}
+
+    recipes = recipe_storage.search_recipes(term)
+
+    try:
+        recipes = recipes + await themealdb.search_external_recipes(term)
+    except themealdb.MealDBError as error:
+        return {"recipes": recipes, "external_search_error": str(error)}
 
     return {"recipes": recipes}
+
+
+@router.get("/recipes")
+async def get_recipes(search: Optional[str] = None):
+    """Get all recipes, or search internal recipes plus TheMealDB by title"""
+    # TODO: Add pagination when we have more than 100 recipes
+    return await _combined_search(search)
+
+
+@router.get("/recipes/search")
+async def search_recipes_endpoint(q: Optional[str] = None, search: Optional[str] = None):
+    """Search internal recipes plus TheMealDB by title (q or search query param)"""
+    return await _combined_search(q or search)
 
 
 @router.get("/recipes/export")
@@ -30,6 +47,19 @@ def export_recipes():
     # Convert to dict for JSON serialization; jsonable_encoder handles datetimes
     recipes_dict = [recipe.model_dump() for recipe in recipes]
     return JSONResponse(content=jsonable_encoder(recipes_dict))
+
+
+@router.get("/recipes/external/{meal_id}")
+async def get_external_recipe(meal_id: str):
+    """Get a specific recipe by ID from TheMealDB"""
+    try:
+        recipe = await themealdb.get_external_recipe(meal_id)
+    except themealdb.MealDBError as error:
+        raise HTTPException(status_code=502, detail=str(error))
+
+    if not recipe:
+        raise HTTPException(status_code=404, detail=f"External recipe '{meal_id}' not found")
+    return recipe
 
 
 @router.get("/recipes/{recipe_id}")

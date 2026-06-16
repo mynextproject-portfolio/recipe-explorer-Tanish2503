@@ -32,6 +32,11 @@
             Found {{ recipes|length }} recipe(s) for "{{ search_query }}"
             <a href="/" class="btn btn-sm btn-outline-secondary ms-2">Clear Search</a>
         </div>
+        {% if external_search_error %}
+        <div class="alert alert-warning">
+            Couldn't reach TheMealDB ({{ external_search_error }}) — showing internal results only.
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
@@ -44,9 +49,14 @@
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">{{ recipe.title }}</h5>
-                    {% if recipe.cuisine %}
+                    {% if recipe.cuisine or recipe.source == 'external' %}
                     <div class="mb-2">
+                        {% if recipe.cuisine %}
                         <span class="badge bg-primary">{{ recipe.cuisine }}</span>
+                        {% endif %}
+                        {% if recipe.source == 'external' %}
+                        <span class="badge bg-info text-dark">TheMealDB</span>
+                        {% endif %}
                     </div>
                     {% endif %}
                     <p class="card-text">{{ recipe.description[:100] }}{% if recipe.description|length > 100 %}...{% endif %}</p>
@@ -65,8 +75,12 @@
                     </div>
                 </div>
                 <div class="card-footer bg-transparent">
+                    {% if recipe.source == 'external' %}
+                    <a href="/recipes/external/{{ recipe.id }}" class="btn btn-primary btn-sm">View Recipe</a>
+                    {% else %}
                     <a href="/recipes/{{ recipe.id }}" class="btn btn-primary btn-sm">View Recipe</a>
                     <a href="/recipes/{{ recipe.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
+                    {% endif %}
                 </div>
             </div>
         </div>
