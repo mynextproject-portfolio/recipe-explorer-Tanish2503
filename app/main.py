@@ -1,4 +1,5 @@
 import json
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from app.services.storage import recipe_storage
 APP_NAME = "Recipe Explorer"
 VERSION = "1.0.0"
 DEBUG = True
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 SAMPLE_DATA_PATH = Path(__file__).parent.parent / "sample-recipes.json"
 

@@ -5,6 +5,7 @@ from typing import List, Optional
 from app.models import RecipeCreate, RecipeUpdate
 from app.services.storage import recipe_storage
 from app.services import themealdb
+from app.services.metrics import timed
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -16,11 +17,19 @@ async def home(request: Request, search: Optional[str] = None, message: Optional
     external_search_error = None
 
     if not search:
-        recipes = recipe_storage.get_all_recipes()
+        with timed("internal", "list_all") as timer:
+            recipes = recipe_storage.get_all_recipes()
+        timing = {"internal_ms": round(timer.duration_ms, 2)}
     else:
-        recipes = recipe_storage.search_recipes(search)
+        with timed("internal", "search") as internal_timer:
+            recipes = recipe_storage.search_recipes(search)
+        timing = {"internal_ms": round(internal_timer.duration_ms, 2)}
+
         try:
-            recipes = recipes + await themealdb.search_external_recipes(search)
+            with timed("external", "search") as external_timer:
+                external_recipes = await themealdb.search_external_recipes(search)
+            recipes = recipes + external_recipes
+            timing["external_ms"] = round(external_timer.duration_ms, 2)
         except themealdb.MealDBError as error:
             external_search_error = str(error)
 
@@ -28,7 +37,8 @@ async def home(request: Request, search: Optional[str] = None, message: Optional
         "recipes": recipes,
         "search_query": search or "",
         "message": message,
-        "external_search_error": external_search_error
+        "external_search_error": external_search_error,
+        "timing": timing
     })
 
 
