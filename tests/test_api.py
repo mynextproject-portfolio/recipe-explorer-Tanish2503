@@ -31,17 +31,48 @@ def test_create_and_get_recipe(client, clean_storage, sample_recipe_data):
     # Create recipe
     create_response = client.post("/api/recipes", json=sample_recipe_data)
     assert create_response.status_code == 200
-    
+
     recipe = create_response.json()
     assert "id" in recipe
     assert "title" in recipe
     assert "created_at" in recipe
     assert recipe["title"] == sample_recipe_data["title"]
-    
+    assert recipe["cuisine"] == sample_recipe_data["cuisine"]
+    assert recipe["instructions"] == sample_recipe_data["instructions"]
+    assert "difficulty" not in recipe
+
     # Get recipe
     get_response = client.get(f"/api/recipes/{recipe['id']}")
     assert get_response.status_code == 200
     assert get_response.json()["id"] == recipe["id"]
+
+
+def test_update_recipe(client, clean_storage, sample_recipe_data):
+    """Contract test: Update recipe persists changes"""
+    create_response = client.post("/api/recipes", json=sample_recipe_data)
+    recipe_id = create_response.json()["id"]
+
+    updated_payload = dict(sample_recipe_data, title="Updated Title", cuisine="Italian")
+    update_response = client.put(f"/api/recipes/{recipe_id}", json=updated_payload)
+    assert update_response.status_code == 200
+    assert update_response.json()["title"] == "Updated Title"
+    assert update_response.json()["cuisine"] == "Italian"
+
+    get_response = client.get(f"/api/recipes/{recipe_id}")
+    assert get_response.json()["title"] == "Updated Title"
+
+
+def test_search_recipes_by_title(client, clean_storage, sample_recipe_data):
+    """Contract test: Search filters recipes by title substring"""
+    client.post("/api/recipes", json=sample_recipe_data)
+
+    match_response = client.get("/api/recipes", params={"search": "Test"})
+    assert match_response.status_code == 200
+    assert len(match_response.json()["recipes"]) == 1
+
+    no_match_response = client.get("/api/recipes", params={"search": "Nonexistent"})
+    assert no_match_response.status_code == 200
+    assert no_match_response.json()["recipes"] == []
 
 
 def test_recipe_not_found(client, clean_storage):

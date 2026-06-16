@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.routes import api, pages
@@ -26,8 +28,8 @@ async def lifespan(app: FastAPI):
         try:
             with open(SAMPLE_DATA_PATH, "r", encoding="utf-8") as sample_file:
                 recipes_data = json.load(sample_file)
-            count = recipe_storage.import_recipes(recipes_data)
-            print(f"Seeded {count} recipes from {SAMPLE_DATA_PATH.name}")
+            result = recipe_storage.import_recipes(recipes_data)
+            print(f"Seeded {result['imported']} recipes from {SAMPLE_DATA_PATH.name}")
         except Exception as error:
             print(f"Failed to seed sample data: {error}")
 
@@ -43,6 +45,19 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Include routers
 app.include_router(api.router)
 app.include_router(pages.router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return a concise field -> message breakdown instead of Pydantic's raw error objects."""
+    errors = [
+        {
+            "field": ".".join(str(part) for part in error["loc"] if part != "body"),
+            "message": error["msg"],
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": "Validation failed", "errors": errors})
 
 
 # Basic health check
