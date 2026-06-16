@@ -4,23 +4,31 @@ from fastapi.templating import Jinja2Templates
 from typing import List, Optional
 from app.models import RecipeCreate, RecipeUpdate
 from app.services.storage import recipe_storage
+from app.services import themealdb
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/", response_class=HTMLResponse)
-def home(request: Request, search: Optional[str] = None, message: Optional[str] = None):
-    """Home page with recipe list and search"""
-    if search:
-        recipes = recipe_storage.search_recipes(search)
-    else:
+async def home(request: Request, search: Optional[str] = None, message: Optional[str] = None):
+    """Home page with recipe list and search (internal recipes + TheMealDB when searching)"""
+    external_search_error = None
+
+    if not search:
         recipes = recipe_storage.get_all_recipes()
-    
+    else:
+        recipes = recipe_storage.search_recipes(search)
+        try:
+            recipes = recipes + await themealdb.search_external_recipes(search)
+        except themealdb.MealDBError as error:
+            external_search_error = str(error)
+
     return templates.TemplateResponse(request, "index.html", {
         "recipes": recipes,
         "search_query": search or "",
-        "message": message
+        "message": message,
+        "external_search_error": external_search_error
     })
 
 
@@ -33,13 +41,30 @@ def new_recipe_form(request: Request):
     })
 
 
+@router.get("/recipes/external/{meal_id}", response_class=HTMLResponse)
+async def external_recipe_detail(request: Request, meal_id: str):
+    """Recipe detail page for a TheMealDB recipe"""
+    try:
+        recipe = await themealdb.get_external_recipe(meal_id)
+    except themealdb.MealDBError as error:
+        raise HTTPException(status_code=502, detail=str(error))
+
+    if not recipe:
+        raise HTTPException(status_code=404, detail="External recipe not found")
+
+    return templates.TemplateResponse(request, "recipe_detail.html", {
+        "recipe": recipe,
+        "message": None
+    })
+
+
 @router.get("/recipes/{recipe_id}", response_class=HTMLResponse)
 def recipe_detail(request: Request, recipe_id: str, message: Optional[str] = None):
     """Recipe detail page"""
     recipe = recipe_storage.get_recipe(recipe_id)
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    
+
     return templates.TemplateResponse(request, "recipe_detail.html", {
         "recipe": recipe,
         "message": message

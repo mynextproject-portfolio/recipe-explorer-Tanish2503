@@ -12,21 +12,32 @@ router = APIRouter(prefix="/api")
 MAX_IMPORT_FILE_SIZE = 1_000_000  # 1MB
 
 
-@router.get("/recipes")
-async def get_recipes(search: Optional[str] = None):
-    """Get all recipes, or search internal recipes plus TheMealDB by title"""
-    # TODO: Add pagination when we have more than 100 recipes
-    if not search:
+async def _combined_search(term: Optional[str]) -> dict:
+    """Search internal storage and, if a term is given, TheMealDB too."""
+    if not term:
         return {"recipes": recipe_storage.get_all_recipes()}
 
-    recipes = recipe_storage.search_recipes(search)
+    recipes = recipe_storage.search_recipes(term)
 
     try:
-        recipes = recipes + await themealdb.search_external_recipes(search)
+        recipes = recipes + await themealdb.search_external_recipes(term)
     except themealdb.MealDBError as error:
         return {"recipes": recipes, "external_search_error": str(error)}
 
     return {"recipes": recipes}
+
+
+@router.get("/recipes")
+async def get_recipes(search: Optional[str] = None):
+    """Get all recipes, or search internal recipes plus TheMealDB by title"""
+    # TODO: Add pagination when we have more than 100 recipes
+    return await _combined_search(search)
+
+
+@router.get("/recipes/search")
+async def search_recipes_endpoint(q: Optional[str] = None, search: Optional[str] = None):
+    """Search internal recipes plus TheMealDB by title (q or search query param)"""
+    return await _combined_search(q or search)
 
 
 @router.get("/recipes/export")

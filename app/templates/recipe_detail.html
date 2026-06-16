@@ -17,6 +17,10 @@
         <h1>{{ recipe.title }}</h1>
         <p class="lead">{{ recipe.description }}</p>
         
+        {% if recipe.source == 'external' %}
+        <span class="badge bg-info text-dark mb-2">From TheMealDB</span>
+        {% endif %}
+
         <div class="row mb-4">
             {% if recipe.cuisine %}
             <div class="col-md-6">
@@ -60,6 +64,7 @@
     </div>
     
     <div class="col-md-4">
+        {% if recipe.source != 'external' %}
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Recipe Actions</h5>
@@ -67,7 +72,7 @@
                     <a href="/recipes/{{ recipe.id }}/edit" class="btn btn-primary">
                         Edit Recipe
                     </a>
-                    <form method="post" action="/recipes/{{ recipe.id }}/delete" 
+                    <form method="post" action="/recipes/{{ recipe.id }}/delete"
                           onsubmit="return confirm('Are you sure you want to delete this recipe?')">
                         <button type="submit" class="btn btn-danger w-100">
                             Delete Recipe
@@ -76,6 +81,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         
         <div class="card mt-3">
             <div class="card-body">
