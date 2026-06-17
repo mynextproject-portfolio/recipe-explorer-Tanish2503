@@ -3,7 +3,11 @@ Contract tests for the timing instrumentation: response timing data,
 X-Query-Time-Ms headers, and the /api/metrics aggregation endpoint.
 """
 
-from app.services import themealdb
+from tests.conftest import FakeExternalClient
+
+from app.dependencies import get_external_client
+from app.exceptions import ExternalAPIError
+from app.main import app
 from app.models import Recipe
 
 EXTERNAL_RECIPE = Recipe(
@@ -28,14 +32,12 @@ def test_list_all_includes_internal_timing_only(client, clean_storage, clean_met
 
 
 def test_search_includes_both_timings(
-    client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch
+    client, clean_storage, clean_metrics, sample_recipe_data
 ):
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def fake_search(query):
-        return [EXTERNAL_RECIPE]
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_results=[EXTERNAL_RECIPE]
+    )
 
     response = client.get("/api/recipes", params={"search": "Test"})
     assert response.status_code == 200
@@ -48,14 +50,12 @@ def test_search_includes_both_timings(
 
 
 def test_search_failure_still_reports_internal_timing(
-    client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch
+    client, clean_storage, clean_metrics, sample_recipe_data
 ):
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def failing_search(query):
-        raise themealdb.MealDBError("TheMealDB API timed out")
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", failing_search)
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_raises=ExternalAPIError("TheMealDB API timed out")
+    )
 
     response = client.get("/api/recipes", params={"search": "Test"})
     body = response.json()
@@ -74,22 +74,20 @@ def test_internal_lookup_sets_response_header(
     assert "X-Query-Time-Ms" in response.headers
 
 
-def test_external_lookup_sets_response_header(client, clean_metrics, monkeypatch):
-    async def fake_get(meal_id):
-        return EXTERNAL_RECIPE
-
-    monkeypatch.setattr(themealdb, "get_external_recipe", fake_get)
+def test_external_lookup_sets_response_header(client, clean_metrics):
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        lookup_result=EXTERNAL_RECIPE
+    )
 
     response = client.get("/api/recipes/external/52772")
     assert response.status_code == 200
     assert "X-Query-Time-Ms" in response.headers
 
 
-def test_external_lookup_failure_still_sets_header(client, clean_metrics, monkeypatch):
-    async def failing_get(meal_id):
-        raise themealdb.MealDBError("TheMealDB API is unreachable")
-
-    monkeypatch.setattr(themealdb, "get_external_recipe", failing_get)
+def test_external_lookup_failure_still_sets_header(client, clean_metrics):
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        lookup_raises=ExternalAPIError("TheMealDB API is unreachable")
+    )
 
     response = client.get("/api/recipes/external/52772")
     assert response.status_code == 502
@@ -97,14 +95,12 @@ def test_external_lookup_failure_still_sets_header(client, clean_metrics, monkey
 
 
 def test_metrics_endpoint_aggregates_internal_and_external(
-    client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch
+    client, clean_storage, clean_metrics, sample_recipe_data
 ):
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def fake_search(query):
-        return [EXTERNAL_RECIPE]
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_results=[EXTERNAL_RECIPE]
+    )
 
     client.get("/api/recipes", params={"search": "Test"})
     client.get("/api/recipes", params={"search": "Test"})
@@ -127,14 +123,12 @@ def test_metrics_start_empty(client, clean_metrics):
 
 
 def test_home_page_shows_timing_info(
-    client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch
+    client, clean_storage, clean_metrics, sample_recipe_data
 ):
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def fake_search(query):
-        return [EXTERNAL_RECIPE]
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_results=[EXTERNAL_RECIPE]
+    )
 
     response = client.get("/", params={"search": "Test"})
     assert response.status_code == 200

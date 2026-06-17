@@ -4,11 +4,16 @@ Adapter for TheMealDB API (https://www.themealdb.com/api.php).
 Fetches recipes in real time and transforms them into our internal Recipe
 schema, tagged with source="external". Results are cached in Redis for 24h
 so repeated searches don't hit the upstream API.
+
+``MealDBClient`` is the concrete ``ExternalRecipeClient`` used by the DI layer;
+the module-level functions it delegates to are kept for direct testing.
 """
 
 from typing import List, Optional
+
 import httpx
 
+from app.exceptions import ExternalAPIError
 from app.models import Recipe
 from app.services.cache import recipe_cache
 from app.services.metrics import metrics
@@ -17,7 +22,7 @@ MEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1"
 REQUEST_TIMEOUT = 5.0
 
 
-class MealDBError(Exception):
+class MealDBError(ExternalAPIError):
     """Raised when TheMealDB can't be reached or returns something we can't use."""
 
 
@@ -130,3 +135,13 @@ async def get_external_recipe(meal_id: str) -> Optional[Recipe]:
 
     await recipe_cache.set(cache_key, recipe.model_dump(mode="json"))
     return recipe
+
+
+class MealDBClient:
+    """Concrete ExternalRecipeClient backed by TheMealDB."""
+
+    async def search(self, query: str) -> List[Recipe]:
+        return await search_external_recipes(query)
+
+    async def get_by_id(self, meal_id: str) -> Optional[Recipe]:
+        return await get_external_recipe(meal_id)
