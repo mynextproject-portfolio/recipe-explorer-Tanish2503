@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.routes import api, pages
-import os
+from app.services.cache import recipe_cache, REDIS_URL_DEFAULT
 from app.services.storage import recipe_storage
 
 # App configuration
@@ -24,7 +25,10 @@ SAMPLE_DATA_PATH = Path(__file__).parent.parent / "sample-recipes.json"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load sample recipes during application startup."""
+    """Connect to Redis, load sample recipes, then clean up on shutdown."""
+    redis_url = os.getenv("REDIS_URL", REDIS_URL_DEFAULT)
+    await recipe_cache.connect(redis_url)
+
     if not SAMPLE_DATA_PATH.exists():
         print(f"No sample data file found at {SAMPLE_DATA_PATH}")
     else:
@@ -37,6 +41,8 @@ async def lifespan(app: FastAPI):
             print(f"Failed to seed sample data: {error}")
 
     yield
+
+    await recipe_cache.close()
 
 
 # Create FastAPI app

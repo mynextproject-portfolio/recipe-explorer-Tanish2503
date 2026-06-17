@@ -2,12 +2,15 @@
 Adapter for TheMealDB API (https://www.themealdb.com/api.php).
 
 Fetches recipes in real time and transforms them into our internal Recipe
-schema, tagged with source="external".
+schema, tagged with source="external". Results are cached in Redis for 24h
+so repeated searches don't hit the upstream API.
 """
 from typing import List, Optional
 import httpx
 
 from app.models import Recipe
+from app.services.cache import recipe_cache
+from app.services.metrics import metrics
 
 MEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1"
 REQUEST_TIMEOUT = 5.0
@@ -74,6 +77,13 @@ async def search_external_recipes(query: str) -> List[Recipe]:
     if not query or not query.strip():
         return []
 
+    cache_key = f"mealdb:search:{query.lower().strip()}"
+    cached = await recipe_cache.get(cache_key)
+    if cached is not None:
+        metrics.record_cache_result("search", hit=True)
+        return [Recipe(**r) for r in cached]
+
+    metrics.record_cache_result("search", hit=False)
     data = await _get("/search.php", {"s": query})
     meals = data.get("meals") or []
 
@@ -83,17 +93,29 @@ async def search_external_recipes(query: str) -> List[Recipe]:
             recipes.append(_to_recipe(meal))
         except Exception:
             continue
+
+    await recipe_cache.set(cache_key, [r.model_dump(mode="json") for r in recipes])
     return recipes
 
 
 async def get_external_recipe(meal_id: str) -> Optional[Recipe]:
     """Look up a single TheMealDB recipe by its id."""
+    cache_key = f"mealdb:lookup:{meal_id}"
+    cached = await recipe_cache.get(cache_key)
+    if cached is not None:
+        metrics.record_cache_result("lookup", hit=True)
+        return Recipe(**cached)
+
+    metrics.record_cache_result("lookup", hit=False)
     data = await _get("/lookup.php", {"i": meal_id})
     meals = data.get("meals") or []
     if not meals:
         return None
 
     try:
-        return _to_recipe(meals[0])
+        recipe = _to_recipe(meals[0])
     except Exception as error:
         raise MealDBError("TheMealDB returned malformed recipe data") from error
+
+    await recipe_cache.set(cache_key, recipe.model_dump(mode="json"))
+    return recipe
