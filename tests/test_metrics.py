@@ -105,7 +105,7 @@ def test_metrics_endpoint_aggregates_internal_and_external(
     client.get("/api/recipes", params={"search": "Test"})
     client.get("/api/recipes", params={"search": "Test"})
 
-    response = client.get("/api/metrics")
+    response = client.get("/api/metrics/summary")
     assert response.status_code == 200
 
     body = response.json()["metrics"]
@@ -117,7 +117,7 @@ def test_metrics_endpoint_aggregates_internal_and_external(
 
 
 def test_metrics_start_empty(client, clean_metrics):
-    response = client.get("/api/metrics")
+    response = client.get("/api/metrics/summary")
     assert response.status_code == 200
     assert response.json()["metrics"] == {}
 

@@ -3,7 +3,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from app.dependencies import (
     ExternalRecipeClient,
@@ -122,6 +123,15 @@ def get_recipe(
 
 @router.get("/metrics")
 def get_metrics_endpoint():
+    """Prometheus metrics endpoint."""
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
+
+@router.get("/metrics/summary")
+def get_metrics_summary():
     """View aggregated timing metrics for internal storage vs external API calls."""
     return {"metrics": metrics.summary()}
 

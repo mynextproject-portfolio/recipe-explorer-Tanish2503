@@ -17,6 +17,7 @@ from app.exceptions import ExternalAPIError
 from app.models import Recipe
 from app.services.cache import recipe_cache
 from app.services.metrics import metrics
+from app.services import prometheus_metrics
 
 MEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1"
 REQUEST_TIMEOUT = 5.0
@@ -97,10 +98,27 @@ async def search_external_recipes(query: str) -> List[Recipe]:
     cached = await recipe_cache.get(cache_key)
     if cached is not None:
         metrics.record_cache_result("search", hit=True)
+        prometheus_metrics.cache_hits.labels(operation="search").inc()
         return [Recipe(**r) for r in cached]
 
     metrics.record_cache_result("search", hit=False)
-    data = await _get("/search.php", {"s": query})
+    prometheus_metrics.cache_misses.labels(operation="search").inc()
+
+    try:
+        data = await _get("/search.php", {"s": query})
+        prometheus_metrics.external_api_calls.labels(
+            operation="search", status="success"
+        ).inc()
+    except MealDBError as error:
+        prometheus_metrics.external_api_calls.labels(
+            operation="search", status="error"
+        ).inc()
+        error_type = "timeout" if "timed out" in str(error) else "other"
+        prometheus_metrics.external_api_errors.labels(
+            operation="search", error_type=error_type
+        ).inc()
+        raise
+
     meals = data.get("meals") or []
 
     recipes = []
@@ -120,10 +138,27 @@ async def get_external_recipe(meal_id: str) -> Optional[Recipe]:
     cached = await recipe_cache.get(cache_key)
     if cached is not None:
         metrics.record_cache_result("lookup", hit=True)
+        prometheus_metrics.cache_hits.labels(operation="lookup").inc()
         return Recipe(**cached)
 
     metrics.record_cache_result("lookup", hit=False)
-    data = await _get("/lookup.php", {"i": meal_id})
+    prometheus_metrics.cache_misses.labels(operation="lookup").inc()
+
+    try:
+        data = await _get("/lookup.php", {"i": meal_id})
+        prometheus_metrics.external_api_calls.labels(
+            operation="lookup", status="success"
+        ).inc()
+    except MealDBError as error:
+        prometheus_metrics.external_api_calls.labels(
+            operation="lookup", status="error"
+        ).inc()
+        error_type = "timeout" if "timed out" in str(error) else "other"
+        prometheus_metrics.external_api_errors.labels(
+            operation="lookup", error_type=error_type
+        ).inc()
+        raise
+
     meals = data.get("meals") or []
     if not meals:
         return None
