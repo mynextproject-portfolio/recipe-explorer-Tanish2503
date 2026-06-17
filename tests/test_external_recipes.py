@@ -1,10 +1,15 @@
 """
-Contract tests for the TheMealDB integration exposed through /api/recipes.
-The adapter functions are monkeypatched so these tests never hit the real
-network.
+Contract tests for the external recipe integration exposed through the API and
+HTML pages. Dependencies are swapped via FastAPI's dependency_overrides so
+these tests never hit the real network.
 """
 
-from app.services import themealdb
+import pytest
+from tests.conftest import FakeExternalClient
+
+from app.dependencies import get_external_client
+from app.exceptions import ExternalAPIError
+from app.main import app
 from app.models import Recipe
 
 EXTERNAL_RECIPE = Recipe(
@@ -19,45 +24,47 @@ EXTERNAL_RECIPE = Recipe(
 )
 
 
+# ---------------------------------------------------------------------------
+# API: /api/recipes (search)
+# ---------------------------------------------------------------------------
+
+
 def test_search_combines_internal_and_external_results(
-    client, clean_storage, sample_recipe_data, monkeypatch
+    client, clean_storage, sample_recipe_data
 ):
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def fake_search(query):
-        return [EXTERNAL_RECIPE]
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_results=[EXTERNAL_RECIPE]
+    )
 
     response = client.get("/api/recipes", params={"search": "Test"})
     assert response.status_code == 200
 
-    recipes = response.json()["recipes"]
-    sources = {recipe["source"] for recipe in recipes}
+    sources = {r["source"] for r in response.json()["recipes"]}
     assert sources == {"internal", "external"}
 
 
-def test_search_without_query_skips_external_call(client, clean_storage, monkeypatch):
-    async def fake_search(query):
-        raise AssertionError(
-            "external search should not be called without a search term"
-        )
+def test_search_without_query_skips_external_call(client, clean_storage):
+    class _AssertNotCalled:
+        async def search(self, query):
+            raise AssertionError("external search must not be called without a term")
 
-    monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
+        async def get_by_id(self, meal_id):
+            return None
+
+    app.dependency_overrides[get_external_client] = lambda: _AssertNotCalled()
 
     response = client.get("/api/recipes")
     assert response.status_code == 200
 
 
 def test_search_degrades_gracefully_when_external_api_fails(
-    client, clean_storage, sample_recipe_data, monkeypatch
+    client, clean_storage, sample_recipe_data
 ):
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def failing_search(query):
-        raise themealdb.MealDBError("TheMealDB API timed out")
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", failing_search)
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_raises=ExternalAPIError("TheMealDB API timed out")
+    )
 
     response = client.get("/api/recipes", params={"search": "Test"})
     assert response.status_code == 200
@@ -68,12 +75,15 @@ def test_search_degrades_gracefully_when_external_api_fails(
     assert "external_search_error" in body
 
 
-def test_get_external_recipe_success(client, monkeypatch):
-    async def fake_get(meal_id):
-        assert meal_id == "52772"
-        return EXTERNAL_RECIPE
+# ---------------------------------------------------------------------------
+# API: /api/recipes/external/{meal_id}
+# ---------------------------------------------------------------------------
 
-    monkeypatch.setattr(themealdb, "get_external_recipe", fake_get)
+
+def test_get_external_recipe_success(client):
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        lookup_result=EXTERNAL_RECIPE
+    )
 
     response = client.get("/api/recipes/external/52772")
     assert response.status_code == 200
@@ -81,69 +91,67 @@ def test_get_external_recipe_success(client, monkeypatch):
     assert response.json()["id"] == "52772"
 
 
-def test_get_external_recipe_not_found(client, monkeypatch):
-    async def fake_get(meal_id):
-        return None
-
-    monkeypatch.setattr(themealdb, "get_external_recipe", fake_get)
+def test_get_external_recipe_not_found(client):
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        lookup_result=None
+    )
 
     response = client.get("/api/recipes/external/does-not-exist")
     assert response.status_code == 404
 
 
-def test_get_external_recipe_upstream_failure_returns_502(client, monkeypatch):
-    async def failing_get(meal_id):
-        raise themealdb.MealDBError("TheMealDB API is unreachable")
-
-    monkeypatch.setattr(themealdb, "get_external_recipe", failing_get)
+def test_get_external_recipe_upstream_failure_returns_502(client):
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        lookup_raises=ExternalAPIError("TheMealDB API is unreachable")
+    )
 
     response = client.get("/api/recipes/external/52772")
     assert response.status_code == 502
 
 
+# ---------------------------------------------------------------------------
+# API: /api/recipes/search (alias endpoint)
+# ---------------------------------------------------------------------------
+
+
 def test_search_endpoint_alias_combines_both_sources(
-    client, clean_storage, sample_recipe_data, monkeypatch
+    client, clean_storage, sample_recipe_data
 ):
     """GET /api/recipes/search?q= must not be swallowed by the {recipe_id} route."""
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def fake_search(query):
-        assert query == "arrabiata"
-        return [EXTERNAL_RECIPE]
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
+    fake = FakeExternalClient(search_results=[EXTERNAL_RECIPE])
+    app.dependency_overrides[get_external_client] = lambda: fake
 
     response = client.get("/api/recipes/search", params={"q": "arrabiata"})
     assert response.status_code == 200
+    assert fake.last_search_query == "arrabiata"
 
-    recipes = response.json()["recipes"]
-    sources = {recipe["source"] for recipe in recipes}
+    sources = {r["source"] for r in response.json()["recipes"]}
     assert "external" in sources
 
 
-def test_search_endpoint_alias_accepts_search_param(client, clean_storage, monkeypatch):
-    async def fake_search(query):
-        return [EXTERNAL_RECIPE]
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
+def test_search_endpoint_alias_accepts_search_param(client, clean_storage):
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_results=[EXTERNAL_RECIPE]
+    )
 
     response = client.get("/api/recipes/search", params={"search": "arrabiata"})
     assert response.status_code == 200
     assert len(response.json()["recipes"]) == 1
 
 
-# --- HTML home page ---
+# ---------------------------------------------------------------------------
+# HTML home page
+# ---------------------------------------------------------------------------
 
 
 def test_home_page_search_shows_external_results(
-    client, clean_storage, sample_recipe_data, monkeypatch
+    client, clean_storage, sample_recipe_data
 ):
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def fake_search(query):
-        return [EXTERNAL_RECIPE]
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_results=[EXTERNAL_RECIPE]
+    )
 
     response = client.get("/", params={"search": "Test"})
     assert response.status_code == 200
@@ -152,39 +160,38 @@ def test_home_page_search_shows_external_results(
 
 
 def test_home_page_search_degrades_gracefully_on_external_failure(
-    client, clean_storage, sample_recipe_data, monkeypatch
+    client, clean_storage, sample_recipe_data
 ):
     client.post("/api/recipes", json=sample_recipe_data)
-
-    async def failing_search(query):
-        raise themealdb.MealDBError("TheMealDB API timed out")
-
-    monkeypatch.setattr(themealdb, "search_external_recipes", failing_search)
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        search_raises=ExternalAPIError("TheMealDB API timed out")
+    )
 
     response = client.get("/", params={"search": "Test"})
     assert response.status_code == 200
     assert "TheMealDB API timed out" in response.text
 
 
-def test_external_recipe_detail_page(client, monkeypatch):
-    async def fake_get(meal_id):
-        assert meal_id == "52772"
-        return EXTERNAL_RECIPE
+# ---------------------------------------------------------------------------
+# HTML external recipe detail page
+# ---------------------------------------------------------------------------
 
-    monkeypatch.setattr(themealdb, "get_external_recipe", fake_get)
+
+def test_external_recipe_detail_page(client):
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        lookup_result=EXTERNAL_RECIPE
+    )
 
     response = client.get("/recipes/external/52772")
     assert response.status_code == 200
     assert EXTERNAL_RECIPE.title in response.text
-    # No edit/delete actions for recipes we don't own
     assert "Edit Recipe" not in response.text
 
 
-def test_external_recipe_detail_page_not_found(client, monkeypatch):
-    async def fake_get(meal_id):
-        return None
-
-    monkeypatch.setattr(themealdb, "get_external_recipe", fake_get)
+def test_external_recipe_detail_page_not_found(client):
+    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
+        lookup_result=None
+    )
 
     response = client.get("/recipes/external/does-not-exist")
     assert response.status_code == 404
