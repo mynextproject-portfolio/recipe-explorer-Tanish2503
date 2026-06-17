@@ -6,8 +6,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.dependencies import get_store
 from app.routes import api, pages
 from app.services.cache import recipe_cache, REDIS_URL_DEFAULT
@@ -75,6 +76,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+# Prometheus metrics endpoint (standard location)
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint at standard location."""
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 
 # @app.get("/status")
