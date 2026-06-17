@@ -8,7 +8,6 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from app.routes import api, pages
 from app.services.cache import recipe_cache, REDIS_URL_DEFAULT
 from app.services.storage import recipe_storage
@@ -18,7 +17,9 @@ APP_NAME = "Recipe Explorer"
 VERSION = "1.0.0"
 DEBUG = True
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s"
+)
 
 SAMPLE_DATA_PATH = Path(__file__).parent.parent / "sample-recipes.json"
 
@@ -66,13 +67,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
         for error in exc.errors()
     ]
-    return JSONResponse(status_code=422, content={"detail": "Validation failed", "errors": errors})
+    return JSONResponse(
+        status_code=422, content={"detail": "Validation failed", "errors": errors}
+    )
 
 
 # Basic health check
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
 
 # @app.get("/status")
 # def status():

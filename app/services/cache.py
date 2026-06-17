@@ -6,9 +6,9 @@ close() at shutdown. All operations degrade gracefully — if Redis is
 unavailable the get/set methods are no-ops, and the caller falls through
 to the real API.
 """
+
 import json
 import logging
-import os
 from typing import Any, Optional
 
 import redis.asyncio as redis

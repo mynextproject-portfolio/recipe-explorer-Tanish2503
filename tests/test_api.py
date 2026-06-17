@@ -3,6 +3,7 @@ Basic smoke and contract tests for Recipe Explorer API.
 These tests verify that endpoints exist and return expected status codes.
 """
 
+
 def test_health_check(client):
     """Smoke test: API is running and responding"""
     response = client.get("/health")
@@ -86,15 +87,15 @@ def test_recipe_pages_load(client, clean_storage, sample_recipe_data):
     # Create a recipe first
     create_response = client.post("/api/recipes", json=sample_recipe_data)
     recipe_id = create_response.json()["id"]
-    
+
     # Test recipe detail page
     response = client.get(f"/recipes/{recipe_id}")
     assert response.status_code == 200
-    
+
     # Test new recipe form
     response = client.get("/recipes/new")
     assert response.status_code == 200
-    
+
     # Test import page
     response = client.get("/import")
     assert response.status_code == 200

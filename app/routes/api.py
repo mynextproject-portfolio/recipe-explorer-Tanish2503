@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Response, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from typing import List, Optional
+from typing import Optional
 import json
-from app.models import Recipe, RecipeCreate, RecipeUpdate
+from app.models import RecipeCreate, RecipeUpdate
 from app.services.storage import recipe_storage
 from app.services import themealdb
 from app.services.metrics import metrics, timed
@@ -18,7 +18,10 @@ async def _combined_search(term: Optional[str]) -> dict:
     if not term:
         with timed("internal", "list_all") as timer:
             recipes = recipe_storage.get_all_recipes()
-        return {"recipes": recipes, "timing": {"internal_ms": round(timer.duration_ms, 2)}}
+        return {
+            "recipes": recipes,
+            "timing": {"internal_ms": round(timer.duration_ms, 2)},
+        }
 
     with timed("internal", "search") as internal_timer:
         recipes = recipe_storage.search_recipes(term)
@@ -29,7 +32,11 @@ async def _combined_search(term: Optional[str]) -> dict:
             external_recipes = await themealdb.search_external_recipes(term)
         timing["external_ms"] = round(external_timer.duration_ms, 2)
     except themealdb.MealDBError as error:
-        return {"recipes": recipes, "external_search_error": str(error), "timing": timing}
+        return {
+            "recipes": recipes,
+            "external_search_error": str(error),
+            "timing": timing,
+        }
 
     return {"recipes": recipes + external_recipes, "timing": timing}
 
@@ -42,7 +49,9 @@ async def get_recipes(search: Optional[str] = None):
 
 
 @router.get("/recipes/search")
-async def search_recipes_endpoint(q: Optional[str] = None, search: Optional[str] = None):
+async def search_recipes_endpoint(
+    q: Optional[str] = None, search: Optional[str] = None
+):
     """Search internal recipes plus TheMealDB by title (q or search query param)"""
     return await _combined_search(q or search)
 
@@ -71,7 +80,9 @@ async def get_external_recipe(meal_id: str, response: Response):
 
     response.headers["X-Query-Time-Ms"] = f"{timer.duration_ms:.2f}"
     if not recipe:
-        raise HTTPException(status_code=404, detail=f"External recipe '{meal_id}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"External recipe '{meal_id}' not found"
+        )
     return recipe
 
 

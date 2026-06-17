@@ -1,6 +1,7 @@
 """
 Test fixtures for Recipe Explorer tests.
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
@@ -39,5 +40,5 @@ def sample_recipe_data():
         "cuisine": "American",
         "ingredients": ["ingredient 1", "ingredient 2"],
         "instructions": ["First, do step 1.", "Then, do step 2."],
-        "tags": ["test"]
+        "tags": ["test"],
     }
