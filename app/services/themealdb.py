@@ -5,6 +5,7 @@ Fetches recipes in real time and transforms them into our internal Recipe
 schema, tagged with source="external". Results are cached in Redis for 24h
 so repeated searches don't hit the upstream API.
 """
+
 from typing import List, Optional
 import httpx
 
@@ -33,7 +34,9 @@ async def _get(path: str, params: dict) -> dict:
     except httpx.TimeoutException as error:
         raise MealDBError("TheMealDB API timed out") from error
     except httpx.HTTPStatusError as error:
-        raise MealDBError(f"TheMealDB API returned status {error.response.status_code}") from error
+        raise MealDBError(
+            f"TheMealDB API returned status {error.response.status_code}"
+        ) from error
     except httpx.HTTPError as error:
         raise MealDBError("TheMealDB API is unreachable") from error
     except ValueError as error:
@@ -50,15 +53,23 @@ def _to_recipe(meal: dict) -> Recipe:
         ingredients.append(f"{measure} {name}".strip() if measure else name)
 
     instructions_text = (meal.get("strInstructions") or "").replace("\r\n", "\n")
-    instructions = [step.strip() for step in instructions_text.split("\n") if step.strip()]
+    instructions = [
+        step.strip() for step in instructions_text.split("\n") if step.strip()
+    ]
 
-    tags = [tag.strip() for tag in (meal.get("strTags") or "").split(",") if tag.strip()]
+    tags = [
+        tag.strip() for tag in (meal.get("strTags") or "").split(",") if tag.strip()
+    ]
     category = (meal.get("strCategory") or "").strip()
     if category:
         tags.append(category)
 
     area = (meal.get("strArea") or "").strip()
-    description = f"{category} dish from {area}".strip() if category or area else "Recipe from TheMealDB"
+    description = (
+        f"{category} dish from {area}".strip()
+        if category or area
+        else "Recipe from TheMealDB"
+    )
 
     return Recipe(
         id=meal["idMeal"],

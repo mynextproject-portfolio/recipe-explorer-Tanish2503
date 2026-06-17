@@ -3,6 +3,7 @@ Contract tests for the TheMealDB integration exposed through /api/recipes.
 The adapter functions are monkeypatched so these tests never hit the real
 network.
 """
+
 from app.services import themealdb
 from app.models import Recipe
 
@@ -18,7 +19,9 @@ EXTERNAL_RECIPE = Recipe(
 )
 
 
-def test_search_combines_internal_and_external_results(client, clean_storage, sample_recipe_data, monkeypatch):
+def test_search_combines_internal_and_external_results(
+    client, clean_storage, sample_recipe_data, monkeypatch
+):
     client.post("/api/recipes", json=sample_recipe_data)
 
     async def fake_search(query):
@@ -36,7 +39,9 @@ def test_search_combines_internal_and_external_results(client, clean_storage, sa
 
 def test_search_without_query_skips_external_call(client, clean_storage, monkeypatch):
     async def fake_search(query):
-        raise AssertionError("external search should not be called without a search term")
+        raise AssertionError(
+            "external search should not be called without a search term"
+        )
 
     monkeypatch.setattr(themealdb, "search_external_recipes", fake_search)
 
@@ -44,7 +49,9 @@ def test_search_without_query_skips_external_call(client, clean_storage, monkeyp
     assert response.status_code == 200
 
 
-def test_search_degrades_gracefully_when_external_api_fails(client, clean_storage, sample_recipe_data, monkeypatch):
+def test_search_degrades_gracefully_when_external_api_fails(
+    client, clean_storage, sample_recipe_data, monkeypatch
+):
     client.post("/api/recipes", json=sample_recipe_data)
 
     async def failing_search(query):
@@ -94,7 +101,9 @@ def test_get_external_recipe_upstream_failure_returns_502(client, monkeypatch):
     assert response.status_code == 502
 
 
-def test_search_endpoint_alias_combines_both_sources(client, clean_storage, sample_recipe_data, monkeypatch):
+def test_search_endpoint_alias_combines_both_sources(
+    client, clean_storage, sample_recipe_data, monkeypatch
+):
     """GET /api/recipes/search?q= must not be swallowed by the {recipe_id} route."""
     client.post("/api/recipes", json=sample_recipe_data)
 
@@ -125,7 +134,10 @@ def test_search_endpoint_alias_accepts_search_param(client, clean_storage, monke
 
 # --- HTML home page ---
 
-def test_home_page_search_shows_external_results(client, clean_storage, sample_recipe_data, monkeypatch):
+
+def test_home_page_search_shows_external_results(
+    client, clean_storage, sample_recipe_data, monkeypatch
+):
     client.post("/api/recipes", json=sample_recipe_data)
 
     async def fake_search(query):
@@ -139,7 +151,9 @@ def test_home_page_search_shows_external_results(client, clean_storage, sample_r
     assert "TheMealDB" in response.text
 
 
-def test_home_page_search_degrades_gracefully_on_external_failure(client, clean_storage, sample_recipe_data, monkeypatch):
+def test_home_page_search_degrades_gracefully_on_external_failure(
+    client, clean_storage, sample_recipe_data, monkeypatch
+):
     client.post("/api/recipes", json=sample_recipe_data)
 
     async def failing_search(query):

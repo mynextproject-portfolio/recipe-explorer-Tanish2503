@@ -2,8 +2,8 @@
 Contract tests for the timing instrumentation: response timing data,
 X-Query-Time-Ms headers, and the /api/metrics aggregation endpoint.
 """
+
 from app.services import themealdb
-from app.services.metrics import metrics
 from app.models import Recipe
 
 EXTERNAL_RECIPE = Recipe(
@@ -27,7 +27,9 @@ def test_list_all_includes_internal_timing_only(client, clean_storage, clean_met
     assert "external_ms" not in timing
 
 
-def test_search_includes_both_timings(client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch):
+def test_search_includes_both_timings(
+    client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch
+):
     client.post("/api/recipes", json=sample_recipe_data)
 
     async def fake_search(query):
@@ -45,7 +47,9 @@ def test_search_includes_both_timings(client, clean_storage, clean_metrics, samp
     assert isinstance(timing["external_ms"], float)
 
 
-def test_search_failure_still_reports_internal_timing(client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch):
+def test_search_failure_still_reports_internal_timing(
+    client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch
+):
     client.post("/api/recipes", json=sample_recipe_data)
 
     async def failing_search(query):
@@ -59,7 +63,9 @@ def test_search_failure_still_reports_internal_timing(client, clean_storage, cle
     assert "external_ms" not in body["timing"]
 
 
-def test_internal_lookup_sets_response_header(client, clean_storage, clean_metrics, sample_recipe_data):
+def test_internal_lookup_sets_response_header(
+    client, clean_storage, clean_metrics, sample_recipe_data
+):
     create_response = client.post("/api/recipes", json=sample_recipe_data)
     recipe_id = create_response.json()["id"]
 
@@ -90,7 +96,9 @@ def test_external_lookup_failure_still_sets_header(client, clean_metrics, monkey
     assert "X-Query-Time-Ms" in response.headers
 
 
-def test_metrics_endpoint_aggregates_internal_and_external(client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch):
+def test_metrics_endpoint_aggregates_internal_and_external(
+    client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch
+):
     client.post("/api/recipes", json=sample_recipe_data)
 
     async def fake_search(query):
@@ -118,7 +126,9 @@ def test_metrics_start_empty(client, clean_metrics):
     assert response.json()["metrics"] == {}
 
 
-def test_home_page_shows_timing_info(client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch):
+def test_home_page_shows_timing_info(
+    client, clean_storage, clean_metrics, sample_recipe_data, monkeypatch
+):
     client.post("/api/recipes", json=sample_recipe_data)
 
     async def fake_search(query):

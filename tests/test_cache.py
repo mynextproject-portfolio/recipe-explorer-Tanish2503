@@ -4,6 +4,7 @@ Tests for Redis caching in the TheMealDB adapter.
 All tests use an in-memory FakeCache so they never touch Redis, and a mock
 HTTP transport so they never hit the real network.
 """
+
 import httpx
 import pytest
 
@@ -67,12 +68,14 @@ def _mock_client(handler):
             base_url=themealdb.MEALDB_BASE_URL,
             timeout=themealdb.REQUEST_TIMEOUT,
         )
+
     return factory
 
 
 # ---------------------------------------------------------------------------
 # RecipeCache unit tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.anyio
 async def test_recipe_cache_get_returns_none_when_disconnected():
@@ -96,8 +99,11 @@ async def test_recipe_cache_available_is_false_when_disconnected():
 # Cache hit / miss in search_external_recipes
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.anyio
-async def test_search_returns_cached_results_without_hitting_api(monkeypatch, clean_metrics):
+async def test_search_returns_cached_results_without_hitting_api(
+    monkeypatch, clean_metrics
+):
     from app.models import Recipe
 
     cached_recipe = Recipe(
@@ -140,7 +146,9 @@ async def test_search_cache_hit_records_metric(monkeypatch, clean_metrics):
         tags=["Meat"],
         source="external",
     )
-    fake_cache = FakeCache({"mealdb:search:chicken": [cached_recipe.model_dump(mode="json")]})
+    fake_cache = FakeCache(
+        {"mealdb:search:chicken": [cached_recipe.model_dump(mode="json")]}
+    )
     monkeypatch.setattr(themealdb, "recipe_cache", fake_cache)
 
     await themealdb.search_external_recipes("chicken")
@@ -151,7 +159,9 @@ async def test_search_cache_hit_records_metric(monkeypatch, clean_metrics):
 
 
 @pytest.mark.anyio
-async def test_search_cache_miss_calls_api_and_populates_cache(monkeypatch, clean_metrics):
+async def test_search_cache_miss_calls_api_and_populates_cache(
+    monkeypatch, clean_metrics
+):
     fake_cache = FakeCache()
 
     def handler(request):
@@ -208,8 +218,11 @@ async def test_search_uses_normalized_cache_key(monkeypatch, clean_metrics):
 # Cache hit / miss in get_external_recipe
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.anyio
-async def test_lookup_returns_cached_recipe_without_hitting_api(monkeypatch, clean_metrics):
+async def test_lookup_returns_cached_recipe_without_hitting_api(
+    monkeypatch, clean_metrics
+):
     from app.models import Recipe
 
     cached_recipe = Recipe(
@@ -222,7 +235,9 @@ async def test_lookup_returns_cached_recipe_without_hitting_api(monkeypatch, cle
         tags=["Meat"],
         source="external",
     )
-    fake_cache = FakeCache({"mealdb:lookup:52772": cached_recipe.model_dump(mode="json")})
+    fake_cache = FakeCache(
+        {"mealdb:lookup:52772": cached_recipe.model_dump(mode="json")}
+    )
 
     def should_not_be_called():
         raise AssertionError("API must not be called on cache hit")
@@ -250,7 +265,9 @@ async def test_lookup_cache_hit_records_metric(monkeypatch, clean_metrics):
         tags=["Meat"],
         source="external",
     )
-    fake_cache = FakeCache({"mealdb:lookup:52772": cached_recipe.model_dump(mode="json")})
+    fake_cache = FakeCache(
+        {"mealdb:lookup:52772": cached_recipe.model_dump(mode="json")}
+    )
     monkeypatch.setattr(themealdb, "recipe_cache", fake_cache)
 
     await themealdb.get_external_recipe("52772")
@@ -281,6 +298,7 @@ async def test_lookup_cache_miss_populates_cache(monkeypatch, clean_metrics):
 # ---------------------------------------------------------------------------
 # Graceful degradation when Redis is unavailable
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.anyio
 async def test_search_works_when_cache_unavailable(monkeypatch, clean_metrics):
@@ -313,6 +331,7 @@ async def test_lookup_works_when_cache_unavailable(monkeypatch, clean_metrics):
 # ---------------------------------------------------------------------------
 # Metrics summary includes cache stats
 # ---------------------------------------------------------------------------
+
 
 def test_metrics_summary_includes_cache_section(clean_metrics):
     metrics.record_cache_result("search", hit=True)

@@ -2,6 +2,7 @@
 Unit tests for the TheMealDB adapter. All HTTP calls are mocked via
 httpx.MockTransport so these tests never hit the real network.
 """
+
 import httpx
 import pytest
 
@@ -30,6 +31,7 @@ def _client_for(handler):
             base_url=themealdb.MEALDB_BASE_URL,
             timeout=themealdb.REQUEST_TIMEOUT,
         )
+
     return factory
 
 

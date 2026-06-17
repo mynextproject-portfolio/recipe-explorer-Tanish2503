@@ -2,6 +2,7 @@
 In-memory timing metrics for comparing internal storage queries against
 external (TheMealDB) API calls, plus Redis cache hit/miss counters.
 """
+
 import logging
 import time
 from collections import defaultdict
@@ -23,7 +24,12 @@ class TimingMetrics:
 
     def record(self, source: str, operation: str, duration_ms: float) -> None:
         self._samples[(source, operation)].append(duration_ms)
-        logger.info("timing source=%s operation=%s duration_ms=%.2f", source, operation, duration_ms)
+        logger.info(
+            "timing source=%s operation=%s duration_ms=%.2f",
+            source,
+            operation,
+            duration_ms,
+        )
 
     def record_cache_result(self, operation: str, *, hit: bool) -> None:
         if hit:
