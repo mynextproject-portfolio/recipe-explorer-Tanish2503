@@ -30,3 +30,6 @@ Thumbs.db
 # Environment
 .env
 *.log
+
+# SQLite database (use Docker volume or set DB_PATH for persistence)
+*.db

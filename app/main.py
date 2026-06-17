@@ -8,9 +8,9 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from app.dependencies import get_store
 from app.routes import api, pages
 from app.services.cache import recipe_cache, REDIS_URL_DEFAULT
-from app.services.storage import recipe_storage
 
 # App configuration
 APP_NAME = "Recipe Explorer"
@@ -30,13 +30,12 @@ async def lifespan(app: FastAPI):
     redis_url = os.getenv("REDIS_URL", REDIS_URL_DEFAULT)
     await recipe_cache.connect(redis_url)
 
-    if not SAMPLE_DATA_PATH.exists():
-        print(f"No sample data file found at {SAMPLE_DATA_PATH}")
-    else:
+    store = get_store()
+    if not store.get_all_recipes() and SAMPLE_DATA_PATH.exists():
         try:
             with open(SAMPLE_DATA_PATH, "r", encoding="utf-8") as sample_file:
                 recipes_data = json.load(sample_file)
-            result = recipe_storage.import_recipes(recipes_data)
+            result = store.import_recipes(recipes_data)
             print(f"Seeded {result['imported']} recipes from {SAMPLE_DATA_PATH.name}")
         except Exception as error:
             print(f"Failed to seed sample data: {error}")

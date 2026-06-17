@@ -6,12 +6,14 @@ default singleton implementations. Tests override providers via
 ``app.dependency_overrides[get_store] = lambda: FakeStore()``.
 """
 
+import os
+from pathlib import Path
 from typing import List, Optional, Protocol
 
 from app.models import Recipe, RecipeCreate, RecipeUpdate
 from app.services.metrics import TimingMetrics
 from app.services.metrics import metrics as _metrics_instance
-from app.services.storage import recipe_storage
+from app.services.sqlite_storage import SQLiteRecipeStorage
 from app.services.themealdb import MealDBClient
 
 
@@ -39,8 +41,12 @@ class ExternalRecipeClient(Protocol):
     async def get_by_id(self, meal_id: str) -> Optional[Recipe]: ...
 
 
+_db_path = Path(os.getenv("DB_PATH", "recipes.db"))
+_sqlite_storage = SQLiteRecipeStorage(db_path=_db_path)
+
+
 def get_store() -> RecipeStore:
-    return recipe_storage
+    return _sqlite_storage
 
 
 def get_external_client() -> ExternalRecipeClient:

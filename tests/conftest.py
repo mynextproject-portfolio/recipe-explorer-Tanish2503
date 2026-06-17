@@ -5,11 +5,11 @@ Test fixtures for Recipe Explorer tests.
 import pytest
 from fastapi.testclient import TestClient
 
-from app.dependencies import get_external_client
+from app.dependencies import get_external_client, get_store
 from app.exceptions import ExternalAPIError
 from app.main import app
 from app.services.metrics import metrics
-from app.services.storage import recipe_storage
+from app.services.storage import RecipeStorage
 
 
 class NullExternalClient:
@@ -71,10 +71,16 @@ def client():
 
 @pytest.fixture
 def clean_storage():
-    """Reset storage before and after each test."""
-    recipe_storage.recipes.clear()
+    """Inject a fresh in-memory store for each test via DI override.
+
+    This keeps tests isolated from the production SQLite database and from
+    each other, while proving the DI layer works: the endpoints don't care
+    whether they receive an in-memory store or a SQLite-backed one.
+    """
+    store = RecipeStorage()
+    app.dependency_overrides[get_store] = lambda: store
     yield
-    recipe_storage.recipes.clear()
+    app.dependency_overrides.pop(get_store, None)
 
 
 @pytest.fixture
