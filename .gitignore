@@ -33,3 +33,7 @@ Thumbs.db
 
 # SQLite database (use Docker volume or set DB_PATH for persistence)
 *.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

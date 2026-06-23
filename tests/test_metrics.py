@@ -122,15 +122,18 @@ def test_metrics_start_empty(client, clean_metrics):
     assert response.json()["metrics"] == {}
 
 
-def test_home_page_shows_timing_info(
+def test_api_search_includes_timing_info(
     client, clean_storage, clean_metrics, sample_recipe_data
 ):
+    """API search response includes timing breakdown (consumed by React frontend)."""
     client.post("/api/recipes", json=sample_recipe_data)
     app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
         search_results=[EXTERNAL_RECIPE]
     )
 
-    response = client.get("/", params={"search": "Test"})
+    response = client.get("/api/recipes", params={"search": "Test"})
     assert response.status_code == 200
-    assert "Query time" in response.text
-    assert "external (TheMealDB)" in response.text
+    body = response.json()
+    assert "timing" in body
+    assert "internal_ms" in body["timing"]
+    assert "external_ms" in body["timing"]
