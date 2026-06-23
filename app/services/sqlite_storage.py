@@ -31,6 +31,18 @@ class SQLiteRecipeStorage:
         conn.row_factory = sqlite3.Row
         return conn
 
+    _V2_COLUMNS = [
+        ("difficulty",           "TEXT"),
+        ("prep_time_minutes",    "INTEGER"),
+        ("cook_time_minutes",    "INTEGER"),
+        ("servings",             "INTEGER"),
+        ("nutritional_info",     "TEXT"),
+        ("dietary_restrictions", "TEXT"),
+        ("equipment",            "TEXT"),
+        ("techniques",           "TEXT"),
+        ("related_recipe_ids",   "TEXT"),
+    ]
+
     def _init_db(self) -> None:
         with self._connect() as conn:
             conn.execute(
@@ -49,6 +61,11 @@ class SQLiteRecipeStorage:
                 )
                 """
             )
+            # Idempotent schema migration: add v2 columns if missing
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(recipes)").fetchall()}
+            for col_name, col_type in self._V2_COLUMNS:
+                if col_name not in existing:
+                    conn.execute(f"ALTER TABLE recipes ADD COLUMN {col_name} {col_type}")
 
     def _row_to_recipe(self, row: sqlite3.Row) -> Recipe:
         return Recipe(

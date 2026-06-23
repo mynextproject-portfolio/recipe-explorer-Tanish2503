@@ -14,9 +14,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from app.models import Recipe, RecipeCreate, RecipeUpdate
+from app.models_v2 import RecipeCreateV2, RecipeUpdateV2, RecipeV2, SortOrder
 from app.services.metrics import TimingMetrics
 from app.services.metrics import metrics as _metrics_instance
 from app.services.sqlite_storage import SQLiteRecipeStorage
+from app.services.sqlite_storage_v2 import SQLiteRecipeStorageV2
 from app.services.themealdb import MealDBClient
 from app.services.user_storage import Favorite, SQLiteUserStorage, User
 
@@ -63,6 +65,45 @@ def get_external_client() -> ExternalRecipeClient:
 
 def get_metrics() -> TimingMetrics:
     return _metrics_instance
+
+
+# ---------------------------------------------------------------------------
+# v2 recipe store
+# ---------------------------------------------------------------------------
+
+
+class RecipeStoreV2(RecipeStore, Protocol):
+    def get_all_recipes_v2(self) -> List[RecipeV2]: ...
+
+    def get_recipe_v2(self, recipe_id: str) -> Optional[RecipeV2]: ...
+
+    def search_recipes_v2(
+        self,
+        query: Optional[str],
+        cuisine: Optional[str],
+        difficulty: Optional[str],
+        dietary: Optional[str],
+        sort: SortOrder,
+    ) -> List[RecipeV2]: ...
+
+    def get_recipes_by_ids(self, ids: List[str]) -> List[RecipeV2]: ...
+
+    def create_recipe_v2(self, data: RecipeCreateV2) -> RecipeV2: ...
+
+    def update_recipe_v2(
+        self, recipe_id: str, data: RecipeUpdateV2
+    ) -> Optional[RecipeV2]: ...
+
+    def bulk_create_v2(
+        self, recipes: List[RecipeCreateV2]
+    ) -> tuple[List[RecipeV2], List[dict]]: ...
+
+
+_sqlite_storage_v2 = SQLiteRecipeStorageV2(db_path=_db_path)
+
+
+def get_store_v2() -> RecipeStoreV2:
+    return _sqlite_storage_v2
 
 
 # ---------------------------------------------------------------------------
