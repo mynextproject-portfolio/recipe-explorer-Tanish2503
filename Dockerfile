@@ -1,17 +1,20 @@
-FROM python:3.12-slim
+# --- Frontend build stage ---
+FROM node:20-slim AS frontend-builder
+WORKDIR /build
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
 
-# Set working directory
+# --- Python runtime stage ---
+FROM python:3.12-slim
 WORKDIR /app
 
-# Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
 COPY . .
+COPY --from=frontend-builder /build/dist ./frontend/dist
 
-# Expose port
 EXPOSE 8000
-
-# Run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

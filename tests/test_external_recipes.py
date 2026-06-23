@@ -141,57 +141,53 @@ def test_search_endpoint_alias_accepts_search_param(client, clean_storage):
 
 
 # ---------------------------------------------------------------------------
-# HTML home page
+# API: SPA routes serve index.html (React handles rendering)
 # ---------------------------------------------------------------------------
 
 
-def test_home_page_search_shows_external_results(
+def test_spa_root_returns_html(client):
+    """The root route serves the React SPA index.html."""
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_spa_recipe_route_returns_html(client):
+    """Client-side routes serve the React SPA (React Router handles them)."""
+    response = client.get("/recipes/external/52772")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_api_search_combines_internal_and_external(
     client, clean_storage, sample_recipe_data
 ):
+    """API search merges internal + external results (used by React frontend)."""
     client.post("/api/recipes", json=sample_recipe_data)
     app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
         search_results=[EXTERNAL_RECIPE]
     )
 
-    response = client.get("/", params={"search": "Test"})
+    response = client.get("/api/recipes", params={"search": "Test"})
     assert response.status_code == 200
-    assert EXTERNAL_RECIPE.title in response.text
-    assert "TheMealDB" in response.text
+    body = response.json()
+    titles = [r["title"] for r in body["recipes"]]
+    assert EXTERNAL_RECIPE.title in titles
+    external_sources = [r["source"] for r in body["recipes"] if r["source"] == "external"]
+    assert external_sources
 
 
-def test_home_page_search_degrades_gracefully_on_external_failure(
+def test_api_search_degrades_gracefully_on_external_failure(
     client, clean_storage, sample_recipe_data
 ):
+    """API returns error field when external API fails (React shows it)."""
     client.post("/api/recipes", json=sample_recipe_data)
     app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
         search_raises=ExternalAPIError("TheMealDB API timed out")
     )
 
-    response = client.get("/", params={"search": "Test"})
+    response = client.get("/api/recipes", params={"search": "Test"})
     assert response.status_code == 200
-    assert "TheMealDB API timed out" in response.text
-
-
-# ---------------------------------------------------------------------------
-# HTML external recipe detail page
-# ---------------------------------------------------------------------------
-
-
-def test_external_recipe_detail_page(client):
-    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
-        lookup_result=EXTERNAL_RECIPE
-    )
-
-    response = client.get("/recipes/external/52772")
-    assert response.status_code == 200
-    assert EXTERNAL_RECIPE.title in response.text
-    assert "Edit Recipe" not in response.text
-
-
-def test_external_recipe_detail_page_not_found(client):
-    app.dependency_overrides[get_external_client] = lambda: FakeExternalClient(
-        lookup_result=None
-    )
-
-    response = client.get("/recipes/external/does-not-exist")
-    assert response.status_code == 404
+    body = response.json()
+    assert "external_search_error" in body
+    assert "TheMealDB API timed out" in body["external_search_error"]

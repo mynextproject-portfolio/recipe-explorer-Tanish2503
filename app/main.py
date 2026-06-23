@@ -6,14 +6,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.dependencies import get_store
-from app.routes import api, pages
+from app.routes import api
 from app.services.cache import recipe_cache, REDIS_URL_DEFAULT
 
-# App configuration
 APP_NAME = "Recipe Explorer"
 VERSION = "1.0.0"
 DEBUG = True
@@ -23,6 +22,7 @@ logging.basicConfig(
 )
 
 SAMPLE_DATA_PATH = Path(__file__).parent.parent / "sample-recipes.json"
+FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -46,20 +46,21 @@ async def lifespan(app: FastAPI):
     await recipe_cache.close()
 
 
-# Create FastAPI app
 app = FastAPI(title=APP_NAME, version=VERSION, lifespan=lifespan)
 
-# Mount static files
+# Legacy static files (CSS/JS used by Jinja2 templates)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Include routers
+# React frontend built assets
+if (FRONTEND_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="react-assets")
+
+# API routes
 app.include_router(api.router)
-app.include_router(pages.router)
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Return a concise field -> message breakdown instead of Pydantic's raw error objects."""
     errors = [
         {
             "field": ".".join(str(part) for part in error["loc"] if part != "body"),
@@ -72,22 +73,27 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-# Basic health check
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
 
 
-# Prometheus metrics endpoint (standard location)
 @app.get("/metrics")
 def metrics():
-    """Prometheus metrics endpoint at standard location."""
+    """Prometheus metrics endpoint."""
     return Response(
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,
     )
 
 
-# @app.get("/status")
-# def status():
-#     return {"status": "ok", "version": "1.0.0"}
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(full_path: str):
+    """Serve the React SPA for all non-API routes."""
+    index = FRONTEND_DIST / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Frontend not built. Run: cd frontend && npm run build"},
+    )
