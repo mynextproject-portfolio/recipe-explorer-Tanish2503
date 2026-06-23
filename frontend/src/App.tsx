@@ -1,9 +1,13 @@
 import { Routes, Route } from 'react-router-dom'
+import { useAuth } from './contexts/AuthContext'
 import { Navbar } from './components/Navbar'
 import { HomePage } from './pages/HomePage'
 import { RecipeDetailPage } from './pages/RecipeDetailPage'
 import { AddRecipePage } from './pages/AddRecipePage'
 import { EditRecipePage } from './pages/EditRecipePage'
+import { LoginPage } from './pages/LoginPage'
+import { RegisterPage } from './pages/RegisterPage'
+import { FavoritesPage } from './pages/FavoritesPage'
 
 function NotFound() {
   return (
@@ -18,13 +22,28 @@ function NotFound() {
   )
 }
 
+function AuthLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="h-6 w-6 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+    </div>
+  )
+}
+
 export default function App() {
+  const { isLoading } = useAuth()
+
+  if (isLoading) return <AuthLoading />
+
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <Navbar />
       <main>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/favorites" element={<FavoritesPage />} />
           <Route path="/recipes/new" element={<AddRecipePage />} />
           <Route path="/recipes/external/:id" element={<RecipeDetailPage />} />
           <Route path="/recipes/:id/edit" element={<EditRecipePage />} />

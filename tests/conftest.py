@@ -5,9 +5,10 @@ Test fixtures for Recipe Explorer tests.
 import pytest
 from fastapi.testclient import TestClient
 
-from app.dependencies import get_external_client, get_store
+from app.dependencies import get_external_client, get_store, get_user_store
 from app.exceptions import ExternalAPIError
 from app.main import app
+from app.services.fake_user_storage import FakeUserStorage
 from app.services.metrics import metrics
 from app.services.storage import RecipeStorage
 
@@ -89,6 +90,15 @@ def clean_metrics():
     metrics.reset()
     yield
     metrics.reset()
+
+
+@pytest.fixture
+def clean_user_storage():
+    """Inject a fresh in-memory user store for each test via DI override."""
+    store = FakeUserStorage()
+    app.dependency_overrides[get_user_store] = lambda: store
+    yield store
+    app.dependency_overrides.pop(get_user_store, None)
 
 
 @pytest.fixture
