@@ -16,10 +16,12 @@ from app.dependencies import get_store
 from app.middleware.rate_limit import limiter
 from app.routes import api
 from app.routes import auth as auth_routes
+from app.routes import api_v1 as api_v1_routes
+from app.routes import api_v2 as api_v2_routes
 from app.services.cache import recipe_cache, REDIS_URL_DEFAULT
 
 APP_NAME = "Recipe Explorer"
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 DEBUG = True
 
 logging.basicConfig(
@@ -64,9 +66,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 if (FRONTEND_DIST / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="react-assets")
 
-# Routers
+# Routers — stable unversioned API, then versioned
 app.include_router(api.router)
 app.include_router(auth_routes.router)
+app.include_router(api_v1_routes.router)
+app.include_router(api_v2_routes.router)
 
 
 @app.exception_handler(RequestValidationError)
