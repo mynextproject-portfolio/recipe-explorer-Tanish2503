@@ -9,8 +9,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from app.dependencies import get_store
+from app.middleware.rate_limit import limiter
 from app.routes import api
+from app.routes import auth as auth_routes
 from app.services.cache import recipe_cache, REDIS_URL_DEFAULT
 
 APP_NAME = "Recipe Explorer"
@@ -48,15 +53,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=APP_NAME, version=VERSION, lifespan=lifespan)
 
-# Legacy static files (CSS/JS used by Jinja2 templates)
+# Rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Legacy static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # React frontend built assets
 if (FRONTEND_DIST / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="react-assets")
 
-# API routes
+# Routers
 app.include_router(api.router)
+app.include_router(auth_routes.router)
 
 
 @app.exception_handler(RequestValidationError)

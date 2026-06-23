@@ -1,10 +1,11 @@
 import type { Recipe, RecipeFormData, RecipeSearchResponse } from '../types/recipe'
+import { getAuthHeader } from './authApi'
 
 const BASE = '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader(), ...init?.headers },
     ...init,
   })
   if (!res.ok) {

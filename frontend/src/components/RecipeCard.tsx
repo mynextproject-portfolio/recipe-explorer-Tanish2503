@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Clock, ChefHat } from 'lucide-react'
 import type { Recipe } from '../types/recipe'
 import { SourceBadge } from './SourceBadge'
+import { FavoriteButton } from './FavoriteButton'
 
 const FALLBACK_IMAGES = [
   'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=250&fit=crop',
@@ -50,6 +51,9 @@ export function RecipeCard({ recipe }: Props) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-2 left-2">
           <SourceBadge source={recipe.source} />
+        </div>
+        <div className="absolute top-2 right-2">
+          <FavoriteButton recipeId={recipe.id} source={recipe.source} />
         </div>
       </div>
 
